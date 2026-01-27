@@ -31,12 +31,12 @@ class DocumentRepository:
             row = await conn.fetchrow(query, filename, content, format, file_size)
             return Document.from_db_row(dict(row))
 
-    async def get_by_id(self, document_id: UUID) -> Optional[Document]:
+    async def get_by_id(self, document_id: UUID, chunk_table: str = "chunks_768") -> Optional[Document]:
         """청크 수와 함께 ID로 문서를 조회합니다."""
-        query = """
+        query = f"""
             SELECT d.*, COUNT(c.id) as chunk_count
             FROM documents d
-            LEFT JOIN chunks c ON c.document_id = d.id
+            LEFT JOIN {chunk_table} c ON c.document_id = d.id
             WHERE d.id = $1
             GROUP BY d.id
         """
@@ -46,12 +46,12 @@ class DocumentRepository:
                 return Document.from_db_row(dict(row))
             return None
 
-    async def get_by_filename(self, filename: str) -> Optional[Document]:
+    async def get_by_filename(self, filename: str, chunk_table: str = "chunks_768") -> Optional[Document]:
         """파일 이름으로 문서를 조회합니다."""
-        query = """
+        query = f"""
             SELECT d.*, COUNT(c.id) as chunk_count
             FROM documents d
-            LEFT JOIN chunks c ON c.document_id = d.id
+            LEFT JOIN {chunk_table} c ON c.document_id = d.id
             WHERE d.filename = $1
             GROUP BY d.id
         """
@@ -61,12 +61,12 @@ class DocumentRepository:
                 return Document.from_db_row(dict(row))
             return None
 
-    async def list_all(self) -> list[Document]:
+    async def list_all(self, chunk_table: str = "chunks_768") -> list[Document]:
         """청크 수와 함께 모든 문서 목록을 조회합니다."""
-        query = """
+        query = f"""
             SELECT d.*, COUNT(c.id) as chunk_count
             FROM documents d
-            LEFT JOIN chunks c ON c.document_id = d.id
+            LEFT JOIN {chunk_table} c ON c.document_id = d.id
             GROUP BY d.id
             ORDER BY d.created_at DESC
         """
@@ -110,13 +110,14 @@ class DocumentRepository:
 class ChunkRepository:
     """청크 CRUD 작업을 위한 리포지토리."""
 
-    def __init__(self, pool: asyncpg.Pool):
+    def __init__(self, pool: asyncpg.Pool, chunk_table: str = "chunks_768"):
         self.pool = pool
+        self.chunk_table = chunk_table
 
     async def create_many(self, chunks: list[dict]) -> list[Chunk]:
         """문서에 대한 여러 청크를 생성합니다."""
-        query = """
-            INSERT INTO chunks (document_id, content, chunk_index, token_count, embedding, search_vector)
+        query = f"""
+            INSERT INTO {self.chunk_table} (document_id, content, chunk_index, token_count, embedding, search_vector)
             VALUES ($1, $2, $3, $4, $5::vector, to_tsvector('simple', $2))
             RETURNING id, document_id, content, chunk_index, token_count, created_at
         """
@@ -136,8 +137,8 @@ class ChunkRepository:
 
     async def get_by_document_id(self, document_id: UUID) -> list[Chunk]:
         """문서의 모든 청크를 조회합니다."""
-        query = """
-            SELECT * FROM chunks
+        query = f"""
+            SELECT * FROM {self.chunk_table}
             WHERE document_id = $1
             ORDER BY chunk_index
         """
@@ -147,7 +148,7 @@ class ChunkRepository:
 
     async def delete_by_document_id(self, document_id: UUID) -> int:
         """문서의 모든 청크를 삭제합니다."""
-        query = "DELETE FROM chunks WHERE document_id = $1"
+        query = f"DELETE FROM {self.chunk_table} WHERE document_id = $1"
         async with self.pool.acquire() as conn:
             result = await conn.execute(query, document_id)
             # "DELETE N"에서 개수 추출
@@ -157,10 +158,10 @@ class ChunkRepository:
         self, embedding: list[float], limit: int = 10
     ) -> list[Chunk]:
         """벡터 유사도로 청크를 검색합니다."""
-        query = """
+        query = f"""
             SELECT c.*, d.filename,
                    1 - (c.embedding <=> $1::vector) AS similarity
-            FROM chunks c
+            FROM {self.chunk_table} c
             JOIN documents d ON d.id = c.document_id
             ORDER BY c.embedding <=> $1::vector
             LIMIT $2
@@ -171,10 +172,10 @@ class ChunkRepository:
 
     async def bm25_search(self, query_text: str, limit: int = 10) -> list[Chunk]:
         """BM25 (ts_rank)를 사용하여 청크를 검색합니다."""
-        query = """
+        query = f"""
             SELECT c.*, d.filename,
                    ts_rank(c.search_vector, plainto_tsquery('simple', $1)) AS bm25_rank
-            FROM chunks c
+            FROM {self.chunk_table} c
             JOIN documents d ON d.id = c.document_id
             WHERE c.search_vector @@ plainto_tsquery('simple', $1)
             ORDER BY bm25_rank DESC
@@ -186,10 +187,10 @@ class ChunkRepository:
 
     async def trigram_search(self, query_text: str, limit: int = 10) -> list[Chunk]:
         """트라이그램 유사도를 사용하여 청크를 검색합니다."""
-        query = """
+        query = f"""
             SELECT c.*, d.filename,
                    similarity(c.content, $1) AS trigram_sim
-            FROM chunks c
+            FROM {self.chunk_table} c
             JOIN documents d ON d.id = c.document_id
             WHERE c.content % $1
             ORDER BY trigram_sim DESC
@@ -201,6 +202,6 @@ class ChunkRepository:
 
     async def count(self) -> int:
         """총 청크 수를 계산합니다."""
-        query = "SELECT COUNT(*) FROM chunks"
+        query = f"SELECT COUNT(*) FROM {self.chunk_table}"
         async with self.pool.acquire() as conn:
             return await conn.fetchval(query)

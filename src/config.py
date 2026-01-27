@@ -20,8 +20,25 @@ class Settings(BaseSettings):
     debug: bool = Field(default=True)
 
     # 모델
-    embedding_model: str = Field(default="intfloat/multilingual-e5-base")
+    embedding_model_type: str = Field(
+        default="multilingual",
+        description="임베딩 모델 타입: 'multilingual' 또는 'minilm'"
+    )
     llm_model_path: str = Field(default="./models/qwen2.5-3b-instruct-q4_k_m.gguf")
+    
+    # 사용 가능한 임베딩 모델들
+    EMBEDDING_MODELS = {
+        "multilingual": "intfloat/multilingual-e5-base",
+        "minilm": "sentence-transformers/all-MiniLM-L6-v2"
+    }
+    
+    @property
+    def embedding_model(self) -> str:
+        """선택된 임베딩 모델 반환."""
+        return self.EMBEDDING_MODELS.get(
+            self.embedding_model_type, 
+            self.EMBEDDING_MODELS["multilingual"]
+        )
 
     # 검색
     default_top_k: int = Field(default=5)

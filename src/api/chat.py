@@ -39,7 +39,7 @@ async def ask_question(request: Request, body: ChatRequest) -> ChatResponse:
     pool = request.app.state.db_pool
     embedding_service = request.app.state.embedding_service
 
-    chunk_repo = ChunkRepository(pool)
+    chunk_repo = ChunkRepository(pool, settings.chunk_table)
     search_service = SearchService(chunk_repo, embedding_service)
 
     # 검색 수행
@@ -124,7 +124,7 @@ async def search_documents(request: Request, body: SearchRequest) -> SearchRespo
     pool = request.app.state.db_pool
     embedding_service = request.app.state.embedding_service
 
-    chunk_repo = ChunkRepository(pool)
+    chunk_repo = ChunkRepository(pool, settings.chunk_table)
     search_service = SearchService(chunk_repo, embedding_service)
 
     # 검색 수행

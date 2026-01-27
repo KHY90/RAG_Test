@@ -19,7 +19,9 @@
 ### Backend
 - **Framework**: FastAPI
 - **Database**: PostgreSQL 15+ with pgvector, pg_trgm extensions
-- **Embedding Model**: `intfloat/multilingual-e5-base` (~1GB)
+- **Embedding Models** (선택 가능):
+  - `intfloat/multilingual-e5-base` (768차원, 다국어 지원, ~1GB) - 기본값
+  - `sentence-transformers/all-MiniLM-L6-v2` (384차원, 영어 최적화, 빠름, ~90MB)
 - **LLM**: Qwen 2.5-3B Instruct (GGUF Q4_K_M, ~2GB)
 - **Vector Search**: pgvector with HNSW index
 - **Full-text Search**: PostgreSQL tsvector with BM25 ranking
@@ -94,7 +96,10 @@ DATABASE_PORT=5432
 DATABASE_NAME=ragtest
 
 # Models
-EMBEDDING_MODEL=intfloat/multilingual-e5-base
+# 임베딩 모델 타입 선택 (다음 중 하나를 선택):
+#   - multilingual: intfloat/multilingual-e5-base (다국어 지원, 기본값)
+#   - minilm: sentence-transformers/all-MiniLM-L6-v2 (영어 최적화, 빠름)
+EMBEDDING_MODEL_TYPE=multilingual
 LLM_MODEL_PATH=./models/qwen2.5-3b-instruct-q4_k_m.gguf
 
 # Server
@@ -205,13 +210,22 @@ Document (문서)
   ├── format: VARCHAR(10) ['txt', 'md', 'json']
   └── chunks: Chunk[]
 
-Chunk (청크)
-  ├── id: UUID
-  ├── document_id: UUID (FK)
-  ├── content: TEXT
-  ├── chunk_index: INTEGER
-  ├── embedding: VECTOR(768)
-  └── search_vector: TSVECTOR
+Chunk (청크) - 선택된 임베딩 모델에 따라 다른 테이블 사용
+  ├── chunks_768 (multilingual-e5-base용)
+  │   ├── id: UUID
+  │   ├── document_id: UUID (FK)
+  │   ├── content: TEXT
+  │   ├── chunk_index: INTEGER
+  │   ├── embedding: VECTOR(768)
+  │   └── search_vector: TSVECTOR
+  │
+  └── chunks_384 (all-MiniLM-L6-v2용)
+      ├── id: UUID
+      ├── document_id: UUID (FK)
+      ├── content: TEXT
+      ├── chunk_index: INTEGER
+      ├── embedding: VECTOR(384)
+      └── search_vector: TSVECTOR
 ```
 
 ### 검색 파이프라인

@@ -99,7 +99,7 @@ async def upload_document(
     embedding_service = request.app.state.embedding_service
 
     document_repo = DocumentRepository(pool)
-    chunk_repo = ChunkRepository(pool)
+    chunk_repo = ChunkRepository(pool, settings.chunk_table)
     ingestion_service = IngestionService(document_repo, chunk_repo, embedding_service)
 
     try:
@@ -134,7 +134,7 @@ async def list_documents(request: Request) -> DocumentListResponse:
     pool = request.app.state.db_pool
     document_repo = DocumentRepository(pool)
 
-    documents = await document_repo.list_all()
+    documents = await document_repo.list_all(settings.chunk_table)
 
     return DocumentListResponse(
         documents=[
@@ -159,7 +159,7 @@ async def get_document(request: Request, document_id: UUID) -> DocumentDetail:
     pool = request.app.state.db_pool
     document_repo = DocumentRepository(pool)
 
-    document = await document_repo.get_by_id(document_id)
+    document = await document_repo.get_by_id(document_id, settings.chunk_table)
 
     if not document:
         raise HTTPException(
@@ -189,7 +189,7 @@ async def delete_document(request: Request, document_id: UUID) -> None:
     document_repo = DocumentRepository(pool)
 
     # 문서가 존재하는지 확인
-    document = await document_repo.get_by_id(document_id)
+    document = await document_repo.get_by_id(document_id, settings.chunk_table)
     if not document:
         raise HTTPException(
             status_code=404,

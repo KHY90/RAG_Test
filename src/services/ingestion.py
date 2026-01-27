@@ -188,7 +188,8 @@ class IngestionService:
             raise ValueError(f"Unsupported format: {format}")
 
         # 같은 파일 이름을 가진 기존 문서 확인
-        existing = await self.document_repo.get_by_filename(filename)
+        from src.config import settings
+        existing = await self.document_repo.get_by_filename(filename, settings.chunk_table)
         if existing:
             # 기존 문서 및 해당 청크 삭제
             await self.document_repo.delete(existing.id)
