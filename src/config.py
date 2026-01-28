@@ -1,5 +1,6 @@
 """pydantic-settings를 사용한 애플리케이션 설정."""
 
+from typing import ClassVar
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -27,7 +28,7 @@ class Settings(BaseSettings):
     llm_model_path: str = Field(default="./models/qwen2.5-3b-instruct-q4_k_m.gguf")
     
     # 사용 가능한 임베딩 모델들
-    EMBEDDING_MODELS = {
+    EMBEDDING_MODELS: ClassVar[dict[str, str]] = {
         "multilingual": "intfloat/multilingual-e5-base",
         "minilm": "sentence-transformers/all-MiniLM-L6-v2"
     }
