@@ -111,9 +111,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.embedding_service = embedding_service
     print("Embedding model loaded.")
 
-    # 생성 서비스 초기화 (메모리 절약을 위한 지연 로드)
-    print("Generation service will be loaded on first use.")
-    app.state.generation_service = None
+    # 생성 서비스 초기화 (시작 시 로드)
+    print("Loading LLM model...")
+    from src.services.generation import GenerationService
+
+    generation_service = GenerationService()
+    try:
+        generation_service._load_model()
+        app.state.generation_service = generation_service
+        print("LLM model loaded.")
+    except ImportError as e:
+        print(f"WARNING: {e}")
+        print("Chat API will use fallback responses.")
+        app.state.generation_service = None
+    except Exception as e:
+        print(f"WARNING: Failed to load LLM model: {e}")
+        print("Chat API will use fallback responses until model is available.")
+        app.state.generation_service = None
 
     yield
 

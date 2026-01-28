@@ -105,12 +105,12 @@ async def ask_question(request: Request, body: ChatRequest) -> ChatResponse:
             question=body.question,
             context=context_texts,
         )
-    except FileNotFoundError as e:
-        # 모델 파일을 찾을 수 없음 - 플레이스홀더 답변과 함께 검색 결과 반환
+    except ImportError as e:
+        # transformers/torch가 설치되지 않음 - fallback 답변 반환
         answer = _generate_fallback_answer(body.question, context_texts)
     except Exception as e:
         # 생성 실패 - 오류 메시지와 함께 검색 결과 반환
-        answer = f"생성 오류: {str(e)}. 관련 소스는 같습니다."
+        answer = f"생성 오류: {str(e)}. 관련 소스는 아래를 참고하세요."
     generation_time_ms = (time.perf_counter() - generation_start) * 1000
 
     # 소스 참조 생성

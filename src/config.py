@@ -25,7 +25,7 @@ class Settings(BaseSettings):
         default="multilingual",
         description="임베딩 모델 타입: 'multilingual' 또는 'minilm'"
     )
-    llm_model_path: str = Field(default="./models/qwen2.5-3b-instruct-q4_k_m.gguf")
+    llm_model_name: str = Field(default="Qwen/Qwen2.5-3B-Instruct")
     
     # 사용 가능한 임베딩 모델들
     EMBEDDING_MODELS: ClassVar[dict[str, str]] = {

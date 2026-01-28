@@ -1,60 +1,66 @@
 """LLM을 사용한 RAG 답변 생성을 위한 생성 서비스."""
 
-import os
 from typing import Optional
 
 from src.config import settings
 
 
 class GenerationService:
-    """로컬 LLM을 사용하여 답변을 생성하는 서비스."""
+    """Hugging Face transformers를 사용하여 답변을 생성하는 서비스."""
 
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_name: str | None = None):
         """생성 서비스를 초기화합니다.
 
         인수:
-            model_path: GGUF 모델 파일의 경로. None인 경우 설정을 사용합니다.
+            model_name: Hugging Face 모델 이름. None인 경우 설정을 사용합니다.
         """
-        self.model_path = model_path or settings.llm_model_path
-        self._model = None
+        self.model_name = model_name or settings.llm_model_name
+        self._pipeline = None
+        self._tokenizer = None
 
     def _load_model(self):
-        """LLM 모델을 지연 로드합니다."""
-        if self._model is not None:
+        """LLM 모델을 로드합니다."""
+        if self._pipeline is not None:
             return
 
         try:
-            from llama_cpp import Llama
+            from transformers import pipeline, AutoTokenizer
+            import torch
         except ImportError:
             raise ImportError(
-                "llama-cpp-python is required for generation. "
-                "Install with: pip install llama-cpp-python"
+                "transformers와 torch가 필요합니다. "
+                "Install with: pip install transformers torch"
             )
 
-        if not os.path.exists(self.model_path):
-            raise FileNotFoundError(
-                f"Model file not found: {self.model_path}. "
-                "Please download the Qwen2.5-3B-Instruct model."
-            )
+        # GPU 사용 가능 여부 확인
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self._model = Llama(
-            model_path=self.model_path,
-            n_ctx=4096,  # Context window
-            n_threads=4,  # CPU threads
-            n_gpu_layers=0,  # CPU only
-            verbose=False,
+        print(f"Loading LLM model '{self.model_name}' on {device}...")
+
+        # 토크나이저 로드
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+
+        # 파이프라인 생성
+        self._pipeline = pipeline(
+            "text-generation",
+            model=self.model_name,
+            tokenizer=self._tokenizer,
+            device=device if device == "cuda" else -1,  # -1 for CPU
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
         )
+
+        print(f"LLM model loaded successfully on {device}.")
 
     @property
     def model(self):
-        """로드된 모델을 가져옵니다 (지연 로드)."""
+        """로드된 파이프라인을 가져옵니다 (지연 로드)."""
         self._load_model()
-        return self._model
+        return self._pipeline
 
     @property
     def is_loaded(self) -> bool:
         """모델이 로드되었는지 확인합니다."""
-        return self._model is not None
+        return self._pipeline is not None
 
     def generate_answer(
         self,
@@ -74,53 +80,59 @@ class GenerationService:
         반환값:
             생성된 답변 텍스트
         """
-        # RAG 프롬프트 생성
-        prompt = self._build_rag_prompt(question, context)
+        # RAG 메시지 생성
+        messages = self._build_rag_messages(question, context)
 
         # 응답 생성
         response = self.model(
-            prompt,
-            max_tokens=max_tokens,
+            messages,
+            max_new_tokens=max_tokens,
             temperature=temperature,
-            stop=["<|im_end|>", "<|endoftext|>"],
-            echo=False,
+            do_sample=True,
+            pad_token_id=self._tokenizer.eos_token_id,
         )
 
-        # 생성된 텍스트 추출
-        generated_text = response["choices"][0]["text"].strip()
+        # 생성된 텍스트 추출 (assistant 응답만)
+        generated_text = response[0]["generated_text"]
 
-        return generated_text
+        # 마지막 assistant 메시지 추출
+        if isinstance(generated_text, list):
+            # 메시지 형식인 경우
+            for msg in reversed(generated_text):
+                if msg.get("role") == "assistant":
+                    return msg.get("content", "").strip()
 
-    def _build_rag_prompt(self, question: str, context: list[str]) -> str:
-        """컨텍스트와 질문으로 RAG 프롬프트를 생성합니다.
+        return str(generated_text).strip()
 
-        Qwen 채팅 템플릿 형식을 사용합니다.
+    def _build_rag_messages(self, question: str, context: list[str]) -> list[dict]:
+        """컨텍스트와 질문으로 RAG 메시지를 생성합니다.
 
         인수:
             question: 사용자의 질문
             context: 관련 텍스트 청크 목록
 
         반환값:
-            포맷된 프롬프트 문자열
+            메시지 리스트
         """
-        # Combine context chunks
+        # 컨텍스트 결합
         context_text = "\n\n---\n\n".join(context) if context else "관련 컨텍스트를 찾을 수 없습니다."
 
-        # Qwen2.5 채팅 템플릿
-        prompt = f"""<|im_start|>system
-당신은 제공된 컨텍스트를 기반으로 질문에 답변하는 도움이 되는 어시스턴트입니다.
-컨텍스트에 있는 정보만 사용하여 답변하세요. 컨텍스트에
-관련 정보가 포함되어 있지 않다면, 명확하게 말하세요. 질문과 동일한 언어로 답변하세요.
-<|im_end|>
-<|im_start|>user
-Context:
-{context_text}
-
-Question: {question}
-<|im_end|>
-<|im_start|>assistant
-"""
-        return prompt
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "당신은 제공된 컨텍스트를 기반으로 질문에 답변하는 도움이 되는 어시스턴트입니다. "
+                    "컨텍스트에 있는 정보만 사용하여 답변하세요. "
+                    "컨텍스트에 관련 정보가 포함되어 있지 않다면, 명확하게 말하세요. "
+                    "질문과 동일한 언어로 답변하세요."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Context:\n{context_text}\n\nQuestion: {question}",
+            },
+        ]
+        return messages
 
     def generate_no_context_response(self, question: str) -> str:
         """관련 컨텍스트를 찾을 수 없을 때 응답을 생성합니다.
