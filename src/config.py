@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     # 청킹(Chunking)
     chunk_size: int = Field(default=512)
     chunk_overlap: int = Field(default=50)
+    chunk_table: str = Field(default="chunks_768")
 
     # 파일 업로드
     max_file_size: int = Field(default=10485760)  # 10MB

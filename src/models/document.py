@@ -62,7 +62,7 @@ class Chunk:
             content=row["content"],
             chunk_index=row["chunk_index"],
             token_count=row["token_count"],
-            embedding=list(row.get("embedding", [])) if row.get("embedding") else [],
+            embedding=list(row.get("embedding")) if row.get("embedding") is not None else [],
             created_at=row.get("created_at"),
             filename=row.get("filename"),
             similarity_score=row.get("similarity"),
