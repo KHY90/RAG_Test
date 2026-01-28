@@ -9,11 +9,8 @@ until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" -U "$DATABASE_USER"; do
   sleep 1
 done
 
-echo "Database is up - executing migrations"
-
-# Run alembic migrations
-alembic upgrade head
+echo "Database is up - starting application"
 
 # Start the application
-echo "Starting application..."
+# Note: Schema is already applied via docker-entrypoint-initdb.d/schema.sql
 exec uvicorn src.main:app --host 0.0.0.0 --port 8000

@@ -1,0 +1,22 @@
+Hybrid RAG Search System Overview
+
+This document describes a Retrieval-Augmented Generation (RAG) system that combines multiple search methods for improved retrieval accuracy.
+
+Key Features:
+1. Dense Retrieval: Uses vector embeddings from a multilingual-e5-base model to capture semantic similarity between queries and documents.
+2. Sparse Retrieval: Implements BM25-style full-text search using PostgreSQL's tsvector and ts_rank functions.
+3. Trigram Similarity: Leverages pg_trgm extension for fuzzy text matching and typo tolerance.
+4. Reciprocal Rank Fusion (RRF): Combines results from all three methods using RRF algorithm with k=60.
+
+The system is designed for local deployment and supports Korean and English text processing.
+
+Technical Stack:
+- FastAPI for the REST API
+- PostgreSQL with pgvector extension for vector storage
+- Sentence-transformers for text embedding
+- Qwen2.5-0.5B-Instruct for answer generation
+
+Use Cases:
+- Document Q&A: Ask questions about uploaded documents and receive AI-generated answers
+- Semantic Search: Find documents by meaning, not just keywords
+- Knowledge Management: Store and retrieve organizational knowledge efficiently
