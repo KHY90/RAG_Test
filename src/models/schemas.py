@@ -58,7 +58,7 @@ class SourceReference(BaseModel):
     document_id: UUID
     filename: str
     chunk_index: int
-    content_preview: str = Field(max_length=200)
+    content_preview: str = Field(max_length=500)
     relevance_score: float
 
 

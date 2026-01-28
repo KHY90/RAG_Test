@@ -22,6 +22,36 @@ from src.services.generation import GenerationService
 router = APIRouter(tags=["Chat"])
 
 
+def _truncate_at_boundary(text: str, max_length: int) -> str:
+    """텍스트를 문장 또는 단어 경계에서 자릅니다.
+
+    인수:
+        text: 자를 텍스트
+        max_length: 최대 길이
+
+    반환값:
+        문장 또는 단어 경계에서 잘린 텍스트
+    """
+    if len(text) <= max_length:
+        return text
+
+    # max_length 이내에서 마지막 문장 종결 찾기
+    truncated = text[:max_length]
+
+    # 문장 종결 문자 위치 찾기 (마지막 것)
+    for end_char in ['. ', '.\n', '! ', '? ', '다. ', '요. ', '니다. ']:
+        last_pos = truncated.rfind(end_char)
+        if last_pos > max_length * 0.5:  # 최소 50% 이상 유지
+            return truncated[:last_pos + len(end_char)].strip()
+
+    # 문장 종결 없으면 마지막 공백에서 자르기
+    last_space = truncated.rfind(' ')
+    if last_space > max_length * 0.7:
+        return truncated[:last_space] + "..."
+
+    return truncated + "..."
+
+
 def _get_generation_service(request: Request) -> GenerationService:
     """생성 서비스를 가져오거나 생성합니다 (지연 로드)."""
     if request.app.state.generation_service is None:
@@ -89,7 +119,7 @@ async def ask_question(request: Request, body: ChatRequest) -> ChatResponse:
             document_id=result.document_id,
             filename=result.filename,
             chunk_index=result.chunk_index,
-            content_preview=result.content[:200],
+            content_preview=_truncate_at_boundary(result.content, 500),
             relevance_score=min(result.score, 1.0),  # RRF 점수에 대해 1.0으로 제한
         )
         for result in search_results
@@ -177,7 +207,7 @@ def _generate_fallback_answer(question: str, context: list[str]) -> str:
         return "관련 문서를 찾을 수 없습니다."
 
     # 가장 관련성 높은 컨텍스트와 함께 메모 반환
-    top_context = context[0][:500]
+    top_context = _truncate_at_boundary(context[0], 800)
 
     if is_korean:
         return f"LLM 모델이 로드되지 않았습니다. 관련 내용:\n\n{top_context}"
