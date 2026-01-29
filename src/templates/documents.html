@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Documents - RAG Chat{% endblock %}
+
+{% block content %}
+<div class="documents-container">
+    <!-- 헤더 -->
+    <div class="documents-header">
+        <h2>Documents</h2>
+        <p>RAG 시스템에서 사용할 문서를 관리합니다.</p>
+    </div>
+
+    <!-- 업로드 영역 -->
+    <div class="upload-section">
+        <div class="upload-dropzone" id="uploadDropzone">
+            <div class="dropzone-content">
+                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p class="dropzone-text">파일을 드래그하거나 클릭하여 업로드</p>
+                <p class="dropzone-hint">지원 형식: .txt, .md, .json</p>
+            </div>
+            <input type="file" id="fileInput" accept=".txt,.md,.json" hidden>
+        </div>
+
+        <!-- 업로드 진행 상태 -->
+        <div class="upload-progress" id="uploadProgress" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text" id="progressText">업로드 중...</p>
+        </div>
+    </div>
+
+    <!-- 문서 목록 -->
+    <div class="documents-list-section">
+        <div class="list-header">
+            <h3>업로드된 문서</h3>
+            <button class="refresh-button" id="refreshButton" title="새로고침">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="documents-table-wrapper">
+            <table class="documents-table" id="documentsTable">
+                <thead>
+                    <tr>
+                        <th>파일명</th>
+                        <th>형식</th>
+                        <th>크기</th>
+                        <th>청크 수</th>
+                        <th>업로드일</th>
+                        <th>작업</th>
+                    </tr>
+                </thead>
+                <tbody id="documentsTableBody">
+                    <!-- 동적으로 생성됨 -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 빈 상태 -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <p>업로드된 문서가 없습니다.</p>
+            <p class="hint">위의 드롭존에 파일을 드래그하여 업로드하세요.</p>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <div class="loading-state" id="loadingState" style="display: none;">
+            <div class="spinner"></div>
+            <p>문서 목록을 불러오는 중...</p>
+        </div>
+    </div>
+</div>
+
+<!-- 삭제 확인 모달 -->
+<div class="modal" id="deleteModal" style="display: none;">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+        <h3>문서 삭제</h3>
+        <p>정말로 이 문서를 삭제하시겠습니까?</p>
+        <p class="modal-filename" id="deleteFilename"></p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" id="cancelDelete">취소</button>
+            <button class="btn btn-danger" id="confirmDelete">삭제</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const documentManager = new DocumentManager();
+    });
+</script>
+{% endblock %}

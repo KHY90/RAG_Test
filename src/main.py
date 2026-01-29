@@ -9,6 +9,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.config import settings
@@ -16,6 +17,7 @@ from src.db.connection import get_db_pool, close_db_pool
 from src.api.health import router as health_router
 from src.api.documents import router as documents_router
 from src.api.chat import router as chat_router
+from src.api.pages import router as pages_router
 from src.models.schemas import ErrorResponse
 
 # 로깅 설정
@@ -160,10 +162,14 @@ app.add_middleware(ErrorHandlingMiddleware)
 # 3. 요청 로깅 미들웨어
 app.add_middleware(RequestLoggingMiddleware)
 
+# 정적 파일 마운트
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
+
 # 라우터 포함
 app.include_router(health_router)
 app.include_router(documents_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
+app.include_router(pages_router)
 
 
 if __name__ == "__main__":
