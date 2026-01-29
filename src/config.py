@@ -30,7 +30,6 @@ class Settings(BaseSettings):
         description="GGUF 모델 파일 경로"
     )
     llm_context_length: int = Field(default=4096, description="LLM 컨텍스트 길이")
-    llm_gpu_layers: int = Field(default=0, description="GPU에 로드할 레이어 수 (0=CPU only)")
     
     # 사용 가능한 임베딩 모델들
     EMBEDDING_MODELS: ClassVar[dict[str, str]] = {

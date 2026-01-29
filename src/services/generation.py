@@ -18,7 +18,7 @@ class GenerationService:
         self._llm = None
 
     def _load_model(self):
-        """GGUF 모델을 로드합니다."""
+        """GGUF 모델을 로드합니다. GPU 우선, 실패 시 CPU 폴백."""
         if self._llm is not None:
             return
 
@@ -37,16 +37,29 @@ class GenerationService:
                 f"모델을 다운로드하여 해당 경로에 저장해주세요."
             )
 
-        print(f"Loading GGUF model from '{self.model_path}'...")
+        # 1차: GPU 시도 (n_gpu_layers=-1)
+        try:
+            print("GPU 모드로 모델 로드 시도 중...")
+            self._llm = Llama(
+                model_path=str(model_file),
+                n_ctx=settings.llm_context_length,
+                n_gpu_layers=-1,  # 모든 레이어 GPU
+                verbose=False,
+            )
+            print("✓ GPU 모드로 모델 로드 완료")
+            return
+        except Exception as e:
+            print(f"GPU 로드 실패: {e}")
 
+        # 2차: CPU 폴백 (n_gpu_layers=0)
+        print("CPU 모드로 모델 로드 중...")
         self._llm = Llama(
             model_path=str(model_file),
             n_ctx=settings.llm_context_length,
-            n_gpu_layers=settings.llm_gpu_layers,
+            n_gpu_layers=0,  # CPU only
             verbose=False,
         )
-
-        print("GGUF model loaded successfully.")
+        print("✓ CPU 모드로 모델 로드 완료")
 
     @property
     def model(self):
