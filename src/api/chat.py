@@ -22,6 +22,12 @@ from src.services.generation import GenerationService
 router = APIRouter(tags=["Chat"])
 
 
+def is_basic_question(question: str) -> bool:
+    """기본 질문(역할, 기능 등)인지 확인합니다."""
+    question_lower = question.lower()
+    return any(pattern in question_lower for pattern in settings.basic_question_patterns)
+
+
 def _truncate_at_boundary(text: str, max_length: int) -> str:
     """텍스트를 문장 또는 단어 경계에서 자릅니다.
 
@@ -65,6 +71,15 @@ async def ask_question(request: Request, body: ChatRequest) -> ChatResponse:
 
     하이브리드 검색을 사용하여 관련 컨텍스트를 찾은 다음 답변을 생성합니다.
     """
+    # 기본 질문 확인
+    if is_basic_question(body.question):
+        return ChatResponse(
+            answer=settings.basic_response,
+            sources=[],
+            search_time_ms=0.0,
+            generation_time_ms=0.0,
+        )
+
     # 서비스 가져오기
     pool = request.app.state.db_pool
     embedding_service = request.app.state.embedding_service

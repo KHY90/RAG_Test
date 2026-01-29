@@ -13,6 +13,8 @@
 - **자연어 질의응답**: 업로드된 문서 기반 질문 답변 생성
 - **출처 추적**: 답변에 사용된 문서 참조 정보 제공
 - **GPU/CPU 지원**: GPU 사용 시 빠른 추론, CPU만으로도 동작 가능
+- **서버 시작 시 자동 임베딩**: `data/` 폴더의 문서를 자동으로 임베딩하여 DB에 저장
+- **기본 질문 응답**: 챗봇 역할, 기능 등 기본 질문에 대해 시스템 프롬프트 기반 응답 제공
 
 ## 🏗️ 기술 스택
 
@@ -22,14 +24,14 @@
 - **Embedding Models** (선택 가능):
   - `intfloat/multilingual-e5-base` (768차원, 다국어 지원, ~1GB) - 기본값
   - `sentence-transformers/all-MiniLM-L6-v2` (384차원, 영어 최적화, 빠름, ~90MB)
-- **LLM**: Qwen 2.5-3B Instruct (Hugging Face transformers, ~6GB)
+- **LLM**: Qwen 2.5-3B Instruct GGUF (llama-cpp-python, ~2.1GB)
 - **Vector Search**: pgvector with HNSW index
 - **Full-text Search**: PostgreSQL tsvector with BM25 ranking
 - **Trigram Search**: pg_trgm extension
 
 ### Key Libraries
 - `sentence-transformers`: 임베딩 생성
-- `transformers` + `torch`: LLM 추론 (GPU 자동 감지)
+- `llama-cpp-python`: GGUF 모델 기반 LLM 추론 (GPU/CPU 지원)
 - `asyncpg`: 비동기 PostgreSQL 드라이버
 - `pydantic`: 데이터 검증 및 설정 관리
 
@@ -72,13 +74,30 @@ pip install -r requirements.txt
 
 ### 3. 모델 다운로드
 
-모든 모델은 **첫 실행 시 자동으로 다운로드**됩니다:
-- **임베딩 모델**: `intfloat/multilingual-e5-base` (~1GB)
-- **LLM 모델**: `Qwen/Qwen2.5-3B-Instruct` (~6GB)
+#### 임베딩 모델 (자동 다운로드)
+임베딩 모델은 **첫 실행 시 자동으로 다운로드**됩니다:
+- `intfloat/multilingual-e5-base` (~1GB)
 
 다운로드된 모델은 `~/.cache/huggingface/` 디렉토리에 캐시됩니다.
 
-> **참고**: 첫 실행 시 모델 다운로드로 인해 시간이 걸릴 수 있습니다.
+#### LLM 모델 (수동 다운로드 필요)
+LLM 모델은 Hugging Face에서 **직접 다운로드**해야 합니다:
+
+1. [Qwen/Qwen2.5-3B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF) 페이지로 이동
+2. `qwen2.5-3b-instruct-q4_k_m.gguf` 파일 다운로드 (~2.1GB)
+3. 다운로드한 파일을 `models/` 폴더에 저장
+
+![모델 다운로드](모델다운로드.png)
+
+```bash
+# models 폴더 생성 (없는 경우)
+mkdir models
+
+# 다운로드한 파일을 models 폴더로 이동
+# 최종 경로: models/qwen2.5-3b-instruct-q4_k_m.gguf
+```
+
+> **참고**: 다른 양자화 버전을 사용하려면 `.env`에서 `LLM_MODEL_PATH` 설정을 변경하세요.
 
 ### 4. 환경 변수 설정
 
@@ -98,7 +117,11 @@ DATABASE_NAME=ragtest
 #   - multilingual: intfloat/multilingual-e5-base (다국어 지원, 기본값)
 #   - minilm: sentence-transformers/all-MiniLM-L6-v2 (영어 최적화, 빠름)
 EMBEDDING_MODEL_TYPE=multilingual
-LLM_MODEL_NAME=Qwen/Qwen2.5-3B-Instruct
+
+# LLM 모델 설정 (GGUF 형식)
+LLM_MODEL_PATH=./models/qwen2.5-3b-instruct-q4_k_m.gguf
+LLM_CONTEXT_LENGTH=4096
+LLM_GPU_LAYERS=0  # GPU 사용 시 레이어 수 설정 (0=CPU only)
 
 # Server
 HOST=0.0.0.0
@@ -127,6 +150,29 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1
 서버가 실행되면 다음 URL에서 확인할 수 있습니다:
 - **API 문서**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
+
+### 6. 문서 자동 임베딩 (선택)
+
+`data/` 폴더에 문서를 넣어두면 서버 시작 시 자동으로 임베딩됩니다:
+
+```bash
+# data 폴더 생성
+mkdir data
+
+# 문서 파일 추가 (txt, md, json 지원)
+cp your-documents/*.md data/
+```
+
+서버 시작 시 콘솔에서 확인:
+```
+Loading documents from data folder...
+  Loaded: document1.md (5 chunks)
+  Loaded: document2.txt (3 chunks)
+  Skipping (already exists): document3.md
+Documents loaded.
+```
+
+> **참고**: 이미 DB에 존재하는 파일은 자동으로 스킵됩니다.
 
 ## 📖 사용 방법
 
@@ -240,12 +286,18 @@ Chunk (청크) - 선택된 임베딩 모델에 따라 다른 테이블 사용
 
 ## 🔧 문제 해결
 
-### "transformers/torch not installed" 오류
-- 필수 패키지 설치: `pip install transformers torch accelerate`
+### "Model file not found" 오류
+- GGUF 모델 파일이 `models/` 폴더에 있는지 확인
+- `.env`의 `LLM_MODEL_PATH` 경로가 정확한지 확인
+- 모델 파일명: `qwen2.5-3b-instruct-q4_k_m.gguf`
+
+### "llama-cpp-python not installed" 오류
+- 필수 패키지 설치: `pip install llama-cpp-python`
+- GPU 지원 버전 설치: `CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python`
 
 ### "CUDA out of memory" 오류
-- GPU VRAM 부족 시 CPU 모드로 자동 전환됨
-- 또는 더 작은 모델 사용: `.env`에서 `LLM_MODEL_NAME=Qwen/Qwen2.5-1.5B-Instruct`
+- `.env`에서 `LLM_GPU_LAYERS=0`으로 설정하여 CPU 모드 사용
+- 또는 더 작은 양자화 모델 사용: `qwen2.5-3b-instruct-q2_k.gguf`
 
 ### "Database connection failed" 오류
 - PostgreSQL이 실행 중인지 확인: `pg_isready`
@@ -261,9 +313,9 @@ Chunk (청크) - 선택된 임베딩 모델에 따라 다른 테이블 사용
 - `.env`에서 `CHUNK_SIZE` 줄이기
 
 ### 응답 속도가 느림
-- GPU 사용 권장 (CPU 대비 5-10배 빠름)
+- GPU 사용 권장: `.env`에서 `LLM_GPU_LAYERS` 설정 (예: 35)
 - 첫 요청은 모델 로딩으로 시간 소요 (이후 요청은 빠름)
-- 더 작은 모델 사용 고려: `Qwen/Qwen2.5-1.5B-Instruct`
+- 더 작은 양자화 모델 사용 고려: `qwen2.5-3b-instruct-q2_k.gguf` (~1.4GB)
 
 ## 📝 테스트용 샘플 파일
 
@@ -296,6 +348,8 @@ Reciprocal Rank Fusion을 사용하여 두 결과를 통합합니다.
 - ✅ GPU/CPU 모두 지원 (GPU 자동 감지)
 - ✅ 동시 요청 처리
 - ✅ 중복 파일명 자동 교체
+- ✅ 서버 시작 시 data 폴더 자동 임베딩
+- ✅ 기본 질문(역할, 기능 등)에 대한 시스템 응답
 
 ## 📄 라이선스
 

@@ -58,6 +58,43 @@ class Settings(BaseSettings):
     # 파일 업로드
     max_file_size: int = Field(default=10485760)  # 10MB
 
+    # 시스템 프롬프트
+    system_prompt: str = Field(
+        default=(
+            "저는 업로드된 문서를 기반으로 질문에 답변하는 RAG 챗봇입니다. "
+            "문서에서 관련 정보를 검색하여 정확한 답변을 제공합니다."
+        )
+    )
+
+    # 기본 질문 패턴 (역할, 기능 등)
+    basic_question_patterns: list[str] = Field(
+        default=[
+            "너는 누구",
+            "뭐야",
+            "누구야",
+            "무엇을 할 수 있",
+            "뭘 할 수 있",
+            "어떤 역할",
+            "소개해",
+            "기능이 뭐",
+            "what can you do",
+            "who are you",
+            "what are you",
+        ]
+    )
+
+    # 기본 질문에 대한 응답
+    basic_response: str = Field(
+        default=(
+            "저는 RAG(Retrieval-Augmented Generation) 기반 챗봇입니다.\n\n"
+            "**주요 기능:**\n"
+            "- 업로드된 문서에서 관련 정보를 검색합니다\n"
+            "- 검색된 컨텍스트를 바탕으로 질문에 답변합니다\n"
+            "- 참조한 소스 문서를 함께 제공합니다\n\n"
+            "문서를 업로드하고 질문해 주세요!"
+        )
+    )
+
     @property
     def database_url(self) -> str:
         """asyncpg를 위한 데이터베이스 URL 생성."""

@@ -4,6 +4,7 @@ import logging
 import time
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
@@ -90,6 +91,47 @@ embedding_service = None
 generation_service = None
 
 
+async def auto_load_documents(app: FastAPI):
+    """data 폴더의 파일들을 자동으로 임베딩합니다."""
+    from src.db.repositories import DocumentRepository, ChunkRepository
+    from src.services.ingestion import IngestionService
+
+    data_dir = Path("data")
+    if not data_dir.exists():
+        print("Data folder not found, skipping auto-load.")
+        return
+
+    supported_formats = {"txt", "md", "json"}
+    pool = app.state.db_pool
+    embedding_service = app.state.embedding_service
+
+    document_repo = DocumentRepository(pool)
+    chunk_repo = ChunkRepository(pool, settings.chunk_table)
+    ingestion_service = IngestionService(document_repo, chunk_repo, embedding_service)
+
+    for file_path in data_dir.iterdir():
+        if not file_path.is_file():
+            continue
+        ext = file_path.suffix.lstrip(".").lower()
+        if ext not in supported_formats:
+            continue
+
+        # 이미 DB에 있는지 확인
+        existing = await document_repo.get_by_filename(file_path.name, settings.chunk_table)
+        if existing:
+            print(f"  Skipping (already exists): {file_path.name}")
+            continue
+
+        # 파일 읽기 및 처리
+        content = file_path.read_bytes()
+        result = await ingestion_service.process_document(
+            filename=file_path.name,
+            content=content,
+            format=ext,
+        )
+        print(f"  Loaded: {file_path.name} ({result['chunk_count']} chunks)")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """시작 및 종료를 위한 애플리케이션 수명 주기 관리자."""
@@ -130,6 +172,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print(f"WARNING: Failed to load LLM model: {e}")
         print("Chat API will use fallback responses until model is available.")
         app.state.generation_service = None
+
+    # data 폴더 자동 임베딩
+    print("Loading documents from data folder...")
+    await auto_load_documents(app)
+    print("Documents loaded.")
 
     yield
 
